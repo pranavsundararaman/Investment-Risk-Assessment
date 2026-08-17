@@ -8,10 +8,10 @@ Data Collection
 PostgreSQL Storage
 Data Preprocessing
 Feature Engineering
+Exploratory Data Analysis
 
 Remaining:
 
-Exploratory Data Analysis
 Model Training
 Dashboard
 
