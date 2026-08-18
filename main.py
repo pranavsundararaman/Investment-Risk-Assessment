@@ -61,7 +61,24 @@ def main() -> None:
             ]
         ].head(30)
     )
+    from src.target_engineering import (
+        create_future_volatility_target,
+    )
 
+    stock_data = create_future_volatility_target(
+        stock_data
+    )
+
+    print(
+        stock_data[
+            [
+                "ticker",
+                "date",
+                "daily_return",
+                "future_volatility",
+            ]
+        ].head(30)
+    )
 
 if __name__ == "__main__":
     main()
