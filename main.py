@@ -2,7 +2,7 @@ from src.database import (
     create_database_engine,
     fetch_stock_data,
 )
-
+from src.dataset import prepare_training_dataset, split_features_target
 from src.preprocessing import (
     preprocess_stock_data,
 )
@@ -10,7 +10,12 @@ from src.preprocessing import (
 from src.feature_engineering import (
     engineer_features,
 )
-
+from src.target_engineering import create_future_volatility_target, remove_missing_targets
+from src.dataset import (
+    prepare_training_dataset,
+    split_features_target,
+    time_series_train_test_split,
+)
 
 def main() -> None:
     """
@@ -79,6 +84,49 @@ def main() -> None:
             ]
         ].head(30)
     )
+    stock_data = create_future_volatility_target(
+        stock_data
+    )
 
+    stock_data = remove_missing_targets(
+        stock_data
+    )
+
+    stock_data = prepare_training_dataset(
+        stock_data
+    )
+
+    print(stock_data.isna().sum().sum())
+    print(stock_data.shape)
+
+    X, y = split_features_target(stock_data)
+
+    X_train, X_test, y_train, y_test = (
+        time_series_train_test_split(
+            X,
+            y,
+            stock_data["date"],
+            "2025-01-01",
+        )
+    )
+
+    print("X_train:", X_train.shape)
+    print("X_test:", X_test.shape)
+    print("y_train:", y_train.shape)
+    print("y_test:", y_test.shape)
+    
+    print(
+    "Train:",
+    stock_data.loc[X_train.index, "date"].min(),
+    "to",
+    stock_data.loc[X_train.index, "date"].max(),
+)
+
+    print(
+        "Test:",
+        stock_data.loc[X_test.index, "date"].min(),
+        "to",
+        stock_data.loc[X_test.index, "date"].max(),
+    )
 if __name__ == "__main__":
     main()
