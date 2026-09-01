@@ -174,8 +174,9 @@ def main() -> None:
     # =========================
 
     best_params = tune_xgboost(
-        X_train,
-        y_train,
+    X_train,
+    y_train,
+    stock_data.loc[X_train.index, "date"],
     )
     xgb_model = train_xgboost(
     X_train,
