@@ -1,3 +1,4 @@
+import pandas as pd
 import numpy as np
 
 from src.database import (
@@ -34,9 +35,23 @@ from src.evaluation import (
     evaluate_model,
 )
 
-from src.hyperparameter_search import tune_xgboost
+from src.hyperparameter_search import (
+    tune_xgboost,
+)
 
-from src.market_features import add_market_features
+from src.market_features import (
+    add_market_features,
+)
+
+from src.prediction import (
+    predict_volatility,
+    calculate_risk_thresholds,
+    classify_risk,
+)
+
+from src.garch_baseline import (
+    run_garch_baseline,
+)
 
 
 def main() -> None:
@@ -81,10 +96,18 @@ def main() -> None:
     print("\nMissing Values:")
     print(stock_data.isna().sum())
 
+    # =========================
+    # Market Features
+    # =========================
+
     stock_data = add_market_features(
-    stock_data,
-    start_date=str(stock_data["date"].min().date()),
-    end_date=str(stock_data["date"].max().date()),
+        stock_data,
+        start_date=str(
+            stock_data["date"].min().date()
+        ),
+        end_date=str(
+            stock_data["date"].max().date()
+        ),
     )
 
     # =========================
@@ -133,15 +156,20 @@ def main() -> None:
     # 7. Time-Series Split
     # =========================
 
-    (X_train,X_validation,X_test,
-    y_train,y_validation,y_test) = time_series_train_validation_test_split(
+    (
+        X_train,
+        X_validation,
+        X_test,
+        y_train,
+        y_validation,
+        y_test,
+    ) = time_series_train_validation_test_split(
         X,
         y,
         stock_data["date"],
         "2024-01-01",
         "2025-01-01",
     )
-    
 
     print("\nX_train:", X_train.shape)
     print("X_validation:", X_validation.shape)
@@ -152,24 +180,42 @@ def main() -> None:
     print("y_test:", y_test.shape)
 
     print(
-    "\nTrain:",
-    stock_data.loc[X_train.index, "date"].min(),
-    "to",
-    stock_data.loc[X_train.index, "date"].max(),
-)
+        "\nTrain:",
+        stock_data.loc[
+            X_train.index,
+            "date"
+        ].min(),
+        "to",
+        stock_data.loc[
+            X_train.index,
+            "date"
+        ].max(),
+    )
 
     print(
         "Validation:",
-        stock_data.loc[X_validation.index, "date"].min(),
+        stock_data.loc[
+            X_validation.index,
+            "date"
+        ].min(),
         "to",
-        stock_data.loc[X_validation.index, "date"].max(),
+        stock_data.loc[
+            X_validation.index,
+            "date"
+        ].max(),
     )
 
     print(
         "Test:",
-        stock_data.loc[X_test.index, "date"].min(),
+        stock_data.loc[
+            X_test.index,
+            "date"
+        ].min(),
         "to",
-        stock_data.loc[X_test.index, "date"].max(),
+        stock_data.loc[
+            X_test.index,
+            "date"
+        ].max(),
     )
 
     print("\nFeatures:")
@@ -183,19 +229,28 @@ def main() -> None:
     # =========================
 
     best_params = tune_xgboost(
-    X_train,
-    y_train,
-    stock_data.loc[X_train.index, "date"],
+        X_train,
+        y_train,
+        stock_data.loc[
+            X_train.index,
+            "date"
+        ],
     )
-    xgb_model = train_xgboost(
-    X_train,
-    y_train,
-    X_validation,
-    y_validation,
-    best_params,
-    )
+
     # =========================
-    # 9. Predict
+    # 9. Train XGBoost
+    # =========================
+
+    xgb_model = train_xgboost(
+        X_train,
+        y_train,
+        X_validation,
+        y_validation,
+        best_params,
+    )
+
+    # =========================
+    # 10. XGBoost Prediction
     # =========================
 
     xgb_predictions_log = predict_xgboost(
@@ -203,14 +258,13 @@ def main() -> None:
         X_test,
     )
 
-    # Convert log volatility
-    # back to normal volatility
-
     xgb_predictions = np.exp(
         xgb_predictions_log
     )
 
-    xgb_predictions.name = "predicted_volatility"
+    xgb_predictions.name = (
+        "predicted_volatility"
+    )
 
     print("\nXGBoost Predictions:")
     print(
@@ -218,10 +272,9 @@ def main() -> None:
     )
 
     # =========================
-    # 10. Evaluate
+    # 11. XGBoost Evaluation
     # =========================
 
-    # Original target for evaluation
     y_test_original = stock_data.loc[
         X_test.index,
         "future_volatility",
@@ -237,22 +290,28 @@ def main() -> None:
     )
 
     print(xgb_metrics)
-    print("X_test shape at eval time:", X_test.shape)
-    print("Model object id:", id(xgb_model))
-
-    from src.garch_baseline import run_garch_baseline
 
     # =========================
-    # 11. GARCH(1,1) Baseline
+    # 12. GARCH(1,1) Baseline
     # =========================
 
     test_rows = stock_data.loc[
-        X_test.index, ["date", "ticker", "future_volatility"]
+        X_test.index,
+        [
+            "date",
+            "ticker",
+            "future_volatility",
+        ],
     ]
 
     test_dates_by_ticker = (
-        test_rows.groupby("ticker")["date"]
-        .apply(lambda s: sorted(s.unique()))
+        test_rows
+        .groupby("ticker")["date"]
+        .apply(
+            lambda s: sorted(
+                s.unique()
+            )
+        )
         .to_dict()
     )
 
@@ -265,19 +324,97 @@ def main() -> None:
 
     comparison = test_rows.merge(
         garch_predictions,
-        on=["date", "ticker"],
+        on=[
+            "date",
+            "ticker",
+        ],
         how="inner",
     )
 
     garch_metrics = evaluate_model(
-        comparison["future_volatility"],
-        comparison["garch_predicted_volatility"],
+        comparison[
+            "future_volatility"
+        ],
+        comparison[
+            "garch_predicted_volatility"
+        ],
     )
 
-    print("\nGARCH(1,1) Baseline Performance:")
+    print(
+        "\nGARCH(1,1) Baseline Performance:"
+    )
+
     print(garch_metrics)
 
-    print("\nXGBoost R²:", xgb_metrics["r2"], "vs GARCH R²:", garch_metrics["r2"])
+    print(
+        "\nXGBoost R²:",
+        xgb_metrics["r2"],
+        "vs GARCH R²:",
+        garch_metrics["r2"],
+    )
+
+    # =========================
+    # 13. Risk Prediction
+    # =========================
+
+    predictions = predict_volatility(
+        xgb_model,
+        X_test,
+    )
+
+    # Use ONLY training-period volatility
+    # to determine the risk thresholds.
+
+    training_volatility = stock_data.loc[
+        X_train.index,
+        "future_volatility",
+    ]
+
+    low_threshold, high_threshold = (
+        calculate_risk_thresholds(
+            training_volatility
+        )
+    )
+
+    print("\nRisk Thresholds:")
+    print(
+        "Low:",
+        low_threshold,
+    )
+    print(
+        "High:",
+        high_threshold,
+    )
+
+    risk = classify_risk(
+        predictions,
+        low_threshold,
+        high_threshold,
+    )
+
+    results = pd.DataFrame(
+        {
+            "ticker": stock_data.loc[
+                X_test.index,
+                "ticker",
+            ],
+            "date": stock_data.loc[
+                X_test.index,
+                "date",
+            ],
+            "predicted_volatility": predictions,
+            "risk": risk,
+        }
+    )
+
+    print(
+        "\nRisk Predictions:"
+    )
+
+    print(
+        results.head(20)
+    )
+
 
 if __name__ == "__main__":
     main()
