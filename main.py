@@ -29,6 +29,7 @@ from src.dataset import (
 from src.model_training import (
     train_xgboost,
     predict_xgboost,
+    save_xgboost_model,
 )
 
 from src.evaluation import (
@@ -248,6 +249,9 @@ def main() -> None:
         y_validation,
         best_params,
     )
+
+    save_xgboost_model(xgb_model)
+    print("\nXGBoost model saved successfully.")
 
     # =========================
     # 10. XGBoost Prediction

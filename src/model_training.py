@@ -1,6 +1,13 @@
+from pathlib import Path
+
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 import xgboost as xgb
+
+
+DEFAULT_XGBOOST_MODEL_PATH = (
+    Path(__file__).resolve().parent.parent / "models" / "xgboost_model.json"
+)
 
 def train_random_forest(
     X_train: pd.DataFrame,
@@ -72,5 +79,27 @@ def train_xgboost(
         ],
         verbose=False,
     )
+
+    return model
+
+
+def save_xgboost_model(
+    model: xgb.XGBRegressor,
+    path: str | Path = DEFAULT_XGBOOST_MODEL_PATH,
+) -> None:
+    """Save a trained XGBoost model for production predictions."""
+
+    model_path = Path(path)
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    model.save_model(model_path)
+
+
+def load_xgboost_model(
+    path: str | Path = DEFAULT_XGBOOST_MODEL_PATH,
+) -> xgb.XGBRegressor:
+    """Load a trained XGBoost model from disk."""
+
+    model = xgb.XGBRegressor()
+    model.load_model(Path(path))
 
     return model
