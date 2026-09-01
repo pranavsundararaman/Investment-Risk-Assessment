@@ -53,18 +53,11 @@ def train_xgboost(
     y_train: pd.Series,
     X_validation: pd.DataFrame,
     y_validation: pd.Series,
+    best_params: dict,
 ) -> xgb.XGBRegressor:
-    """Train XGBoost with early stopping."""
 
     model = xgb.XGBRegressor(
-        n_estimators=2000,
-        learning_rate=0.01,
-        max_depth=4,
-        min_child_weight=5,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        reg_alpha=0.1,
-        reg_lambda=1.0,
+        **best_params,
         random_state=42,
         n_jobs=-1,
         early_stopping_rounds=50,

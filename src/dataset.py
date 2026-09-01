@@ -22,7 +22,10 @@ def split_features_target(
     feature_columns = [
     "daily_return",
     "log_return",
+    "volatility_5",
+    "volatility_10",
     "volatility_20",
+    "volatility_60",
     "rsi_14",
     "macd_ratio",
     "macd_histogram_norm",

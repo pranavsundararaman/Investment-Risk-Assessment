@@ -272,6 +272,22 @@ def calculate_bollinger_bands(
 
     return stock_data
 
+def add_multi_horizon_volatility(
+    stock_data: pd.DataFrame,
+    windows: list[int] = [5, 10, 20, 60],
+) -> pd.DataFrame:
+    """Add rolling volatility features at multiple horizons."""
+
+    stock_data = stock_data.copy()
+
+    for window in windows:
+        stock_data = calculate_volatility(
+            stock_data,
+            window=window,
+        )
+
+    return stock_data
+
 def engineer_features(
     stock_data: pd.DataFrame,
 ) -> pd.DataFrame:
@@ -293,7 +309,7 @@ def engineer_features(
 
     stock_data = calculate_ema(stock_data)
 
-    stock_data = calculate_volatility(stock_data)
+    stock_data = add_multi_horizon_volatility(stock_data)
 
     stock_data = calculate_rsi(stock_data)
 

@@ -34,6 +34,7 @@ from src.evaluation import (
     evaluate_model,
 )
 
+from src.hyperparameter_search import tune_xgboost
 
 def main() -> None:
     """
@@ -169,16 +170,20 @@ def main() -> None:
     print(y_train.head())
 
     # =========================
-    # 8. Train XGBoost
+    # 8. Hyperparameter Search
     # =========================
 
+    best_params = tune_xgboost(
+        X_train,
+        y_train,
+    )
     xgb_model = train_xgboost(
     X_train,
     y_train,
     X_validation,
     y_validation,
+    best_params,
     )
-
     # =========================
     # 9. Predict
     # =========================
