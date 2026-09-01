@@ -107,7 +107,10 @@ def main() -> None:
             stock_data["date"].min().date()
         ),
         end_date=str(
-            stock_data["date"].max().date()
+            (
+                stock_data["date"].max()
+                + pd.Timedelta(days=1)
+            ).date()
         ),
     )
 
@@ -357,6 +360,7 @@ def main() -> None:
         garch_metrics["r2"],
     )
 
+
     # =========================
     # 13. Risk Prediction
     # =========================
@@ -366,17 +370,10 @@ def main() -> None:
         X_test,
     )
 
-    # Use ONLY training-period volatility
-    # to determine the risk thresholds.
-
-    training_volatility = stock_data.loc[
-        X_train.index,
-        "future_volatility",
-    ]
 
     low_threshold, high_threshold = (
         calculate_risk_thresholds(
-            training_volatility
+            predictions
         )
     )
 
@@ -385,6 +382,7 @@ def main() -> None:
         "Low:",
         low_threshold,
     )
+
     print(
         "High:",
         high_threshold,
@@ -418,7 +416,6 @@ def main() -> None:
     print(
         results.head(20)
     )
-
 
 if __name__ == "__main__":
     main()
