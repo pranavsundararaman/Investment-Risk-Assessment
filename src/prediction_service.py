@@ -173,14 +173,14 @@ def generate_latest_predictions(
             "No complete latest feature rows are available for prediction."
         )
 
-    low_threshold, high_threshold = (
-        calculate_production_risk_thresholds(
-            featured_data
-        )
-    )
+    model = load_xgboost_model(model_path)
 
-    model = load_xgboost_model(
-        model_path
+    low_threshold, high_threshold = (
+        calculate_prediction_risk_thresholds(
+            featured_data,
+            model,
+            feature_columns,
+        )
     )
 
     predictions = predict_volatility(
@@ -228,15 +228,9 @@ def generate_latest_predictions(
         .reset_index(drop=True)
     )
 
-    print("\nHistorical Risk Thresholds:")
-    print(
-        "Low threshold:",
-        low_threshold,
-    )
-    print(
-        "High threshold:",
-        high_threshold,
-    )
+    print("\nModel-Calibrated Risk Thresholds:")
+    print("Low threshold:", low_threshold)
+    print("High threshold:", high_threshold)
 
     return result
 
@@ -256,6 +250,58 @@ def main() -> None:
         )
     )
 
+def calculate_prediction_risk_thresholds(
+    featured_data: pd.DataFrame,
+    model,
+    feature_columns: list[str],
+) -> tuple[float, float]:
+    """Calibrate risk thresholds from out-of-sample validation predictions."""
+
+    validation_data = create_future_volatility_target(
+        featured_data
+    )
+
+    validation_data = remove_missing_targets(
+        validation_data
+    )
+
+    validation_data = create_log_volatility_target(
+        validation_data
+    )
+
+    validation_data = prepare_training_dataset(
+        validation_data
+    )
+
+    validation_data = validation_data[
+        (
+            validation_data["date"]
+            >= pd.Timestamp("2024-01-01")
+        )
+        & (
+            validation_data["date"]
+            < pd.Timestamp("2025-01-01")
+        )
+    ]
+
+    validation_data = validation_data.dropna(
+        subset=feature_columns
+    )
+
+    if validation_data.empty:
+        raise ValueError(
+            "No validation-period data is available "
+            "for risk threshold calibration."
+        )
+
+    validation_predictions = predict_volatility(
+        model,
+        validation_data[feature_columns],
+    )
+
+    return calculate_risk_thresholds(
+        validation_predictions
+    )
 
 if __name__ == "__main__":
     main()
