@@ -301,4 +301,37 @@ def engineer_features(
 
     stock_data = calculate_bollinger_bands(stock_data)
 
+    stock_data["close_to_sma_20"] = (
+    stock_data["close"] / stock_data["sma_20"] - 1
+    )
+
+    stock_data["close_to_ema_20"] = (
+        stock_data["close"] / stock_data["ema_20"] - 1
+    )
+
+    stock_data["macd_ratio"] = (
+        stock_data["macd"] / stock_data["close"]
+    )
+
+    stock_data["bollinger_position"] = (
+        (stock_data["close"] - stock_data["bollinger_lower"])
+        / (
+            stock_data["bollinger_upper"]
+            - stock_data["bollinger_lower"]
+        )
+    )
+    stock_data["macd_histogram_norm"] = (
+    stock_data["macd_histogram"] / stock_data["close"]
+    )
+
+    stock_data["high_low_range"] = (
+        (stock_data["high"] - stock_data["low"])
+        / stock_data["close"]
+    )
+
+    stock_data["volume_ratio"] = (
+        stock_data["volume"]
+        / stock_data.groupby("ticker")["volume"]
+        .transform(lambda x: x.rolling(20).mean())
+    )
     return stock_data

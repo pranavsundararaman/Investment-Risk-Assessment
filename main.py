@@ -1,8 +1,10 @@
+import numpy as np
+
 from src.database import (
     create_database_engine,
     fetch_stock_data,
 )
-from src.dataset import prepare_training_dataset, split_features_target
+
 from src.preprocessing import (
     preprocess_stock_data,
 )
@@ -10,27 +12,61 @@ from src.preprocessing import (
 from src.feature_engineering import (
     engineer_features,
 )
-from src.target_engineering import create_future_volatility_target, remove_missing_targets
+
+from src.target_engineering import (
+    create_future_volatility_target,
+    remove_missing_targets,
+    create_log_volatility_target,
+)
+
 from src.dataset import (
     prepare_training_dataset,
     split_features_target,
-    time_series_train_test_split,
+    time_series_train_validation_test_split,
 )
+
+from src.model_training import (
+    train_xgboost,
+    predict_xgboost,
+)
+
+from src.evaluation import (
+    evaluate_model,
+)
+
 
 def main() -> None:
     """
-    Test the complete data pipeline.
+    Run the complete machine learning pipeline.
     """
+
+    # =========================
+    # 1. Database
+    # =========================
 
     engine = create_database_engine()
 
     stock_data = fetch_stock_data(engine)
 
-    stock_data = preprocess_stock_data(stock_data)
+    # =========================
+    # 2. Preprocessing
+    # =========================
 
-    stock_data = engineer_features(stock_data)
+    stock_data = preprocess_stock_data(
+        stock_data
+    )
 
-    print("\n===== FEATURE ENGINEERING COMPLETED SUCCESSFULLY =====\n")
+    # =========================
+    # 3. Feature Engineering
+    # =========================
+
+    stock_data = engineer_features(
+        stock_data
+    )
+
+    print(
+        "\n===== FEATURE ENGINEERING COMPLETED SUCCESSFULLY =====\n"
+    )
 
     print("Shape:")
     print(stock_data.shape)
@@ -38,52 +74,13 @@ def main() -> None:
     print("\nColumns:")
     print(stock_data.columns.tolist())
 
-    print("\nData Types:")
-    print(stock_data.dtypes)
-
     print("\nMissing Values:")
     print(stock_data.isna().sum())
 
-    print("\nFirst 30 Rows:")
-    print(
-        stock_data[
-            [
-                "ticker",
-                "date",
-                "close",
-                "daily_return",
-                "log_return",
-                "sma_20",
-                "ema_20",
-                "volatility_20",
-                "rsi_14",
-                "macd",
-                "macd_signal",
-                "macd_histogram",
-                "bollinger_upper",
-                "bollinger_middle",
-                "bollinger_lower",
-            ]
-        ].head(30)
-    )
-    from src.target_engineering import (
-        create_future_volatility_target,
-    )
+    # =========================
+    # 4. Target Engineering
+    # =========================
 
-    stock_data = create_future_volatility_target(
-        stock_data
-    )
-
-    print(
-        stock_data[
-            [
-                "ticker",
-                "date",
-                "daily_return",
-                "future_volatility",
-            ]
-        ].head(30)
-    )
     stock_data = create_future_volatility_target(
         stock_data
     )
@@ -92,35 +89,71 @@ def main() -> None:
         stock_data
     )
 
+    stock_data = create_log_volatility_target(
+        stock_data
+    )
+
+    # =========================
+    # 5. Prepare Dataset
+    # =========================
+
     stock_data = prepare_training_dataset(
         stock_data
     )
 
-    print(stock_data.isna().sum().sum())
-    print(stock_data.shape)
-
-    X, y = split_features_target(stock_data)
-
-    X_train, X_test, y_train, y_test = (
-        time_series_train_test_split(
-            X,
-            y,
-            stock_data["date"],
-            "2025-01-01",
-        )
+    print(
+        "\nTotal missing values:",
+        stock_data.isna().sum().sum(),
     )
 
-    print("X_train:", X_train.shape)
-    print("X_test:", X_test.shape)
-    print("y_train:", y_train.shape)
-    print("y_test:", y_test.shape)
-    
     print(
-    "Train:",
+        "Training dataset shape:",
+        stock_data.shape,
+    )
+
+    # =========================
+    # 6. Split Features / Target
+    # =========================
+
+    X, y = split_features_target(
+        stock_data
+    )
+
+    # =========================
+    # 7. Time-Series Split
+    # =========================
+
+    (X_train,X_validation,X_test,
+    y_train,y_validation,y_test) = time_series_train_validation_test_split(
+        X,
+        y,
+        stock_data["date"],
+        "2024-01-01",
+        "2025-01-01",
+    )
+    
+
+    print("\nX_train:", X_train.shape)
+    print("X_validation:", X_validation.shape)
+    print("X_test:", X_test.shape)
+
+    print("y_train:", y_train.shape)
+    print("y_validation:", y_validation.shape)
+    print("y_test:", y_test.shape)
+
+    print(
+    "\nTrain:",
     stock_data.loc[X_train.index, "date"].min(),
     "to",
     stock_data.loc[X_train.index, "date"].max(),
 )
+
+    print(
+        "Validation:",
+        stock_data.loc[X_validation.index, "date"].min(),
+        "to",
+        stock_data.loc[X_validation.index, "date"].max(),
+    )
 
     print(
         "Test:",
@@ -128,5 +161,68 @@ def main() -> None:
         "to",
         stock_data.loc[X_test.index, "date"].max(),
     )
+
+    print("\nFeatures:")
+    print(X_train.columns.tolist())
+
+    print("\nLog Target:")
+    print(y_train.head())
+
+    # =========================
+    # 8. Train XGBoost
+    # =========================
+
+    xgb_model = train_xgboost(
+    X_train,
+    y_train,
+    X_validation,
+    y_validation,
+    )
+
+    # =========================
+    # 9. Predict
+    # =========================
+
+    xgb_predictions_log = predict_xgboost(
+        xgb_model,
+        X_test,
+    )
+
+    # Convert log volatility
+    # back to normal volatility
+
+    xgb_predictions = np.exp(
+        xgb_predictions_log
+    )
+
+    xgb_predictions.name = "predicted_volatility"
+
+    print("\nXGBoost Predictions:")
+    print(
+        xgb_predictions.head(10)
+    )
+
+    # =========================
+    # 10. Evaluate
+    # =========================
+
+    # Original target for evaluation
+    y_test_original = stock_data.loc[
+        X_test.index,
+        "future_volatility",
+    ]
+
+    xgb_metrics = evaluate_model(
+        y_test_original,
+        xgb_predictions,
+    )
+
+    print(
+        "\nXGBoost Performance:"
+    )
+
+    print(xgb_metrics)
+
+
 if __name__ == "__main__":
     main()
