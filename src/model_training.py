@@ -34,27 +34,6 @@ def predict_random_forest(
         name="predicted_volatility",
     )
 
-def train_xgboost(
-    X_train: pd.DataFrame,
-    y_train: pd.Series,
-) -> xgb.XGBRegressor:
-    """Train an XGBoost regression model."""
-
-    model = xgb.XGBRegressor(
-    n_estimators=175,
-    learning_rate=0.08,
-    max_depth=6,
-    random_state=42,
-    n_jobs=-1,
-    )
-
-    model.fit(
-        X_train,
-        y_train,
-    )
-
-    return model
-
 def predict_xgboost(
     model: xgb.XGBRegressor,
     X_test: pd.DataFrame,
