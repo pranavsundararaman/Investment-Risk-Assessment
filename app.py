@@ -6,11 +6,15 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src.feature_engineering import engineer_features
-from src.prediction_service import generate_latest_predictions, load_stock_data_from_database
+from src.prediction_service import (
+    generate_latest_predictions,
+    load_stock_data_from_database,
+)
 from src.preprocessing import preprocess_stock_data
 
 
 RISK_ORDER = ["Low", "Moderate", "High"]
+
 RISK_COLORS = {
     "Low": "#16a34a",
     "Moderate": "#f59e0b",
@@ -20,27 +24,48 @@ RISK_COLORS = {
 
 st.set_page_config(
     page_title="Investment Risk Assessment",
+    page_icon="📊",
     layout="wide",
 )
 
 
-@st.cache_data(ttl=15 * 60, show_spinner=False)
+@st.cache_data(
+    ttl=15 * 60,
+    show_spinner=False,
+)
 def load_predictions() -> pd.DataFrame:
-    """Load latest model predictions from the existing production service."""
+    """Load latest model predictions from the production prediction service."""
 
     predictions = generate_latest_predictions()
-    predictions["date"] = pd.to_datetime(predictions["date"])
+
+    predictions["date"] = pd.to_datetime(
+        predictions["date"]
+    )
+
     return predictions
 
 
-@st.cache_data(ttl=60 * 60, show_spinner=False)
+@st.cache_data(
+    ttl=60 * 60,
+    show_spinner=False,
+)
 def load_historical_features() -> pd.DataFrame:
     """Load stock history and compute existing volatility indicators."""
 
     stock_data = load_stock_data_from_database()
-    processed_data = preprocess_stock_data(stock_data)
-    featured_data = engineer_features(processed_data)
-    featured_data["date"] = pd.to_datetime(featured_data["date"])
+
+    processed_data = preprocess_stock_data(
+        stock_data
+    )
+
+    featured_data = engineer_features(
+        processed_data
+    )
+
+    featured_data["date"] = pd.to_datetime(
+        featured_data["date"]
+    )
+
     return featured_data
 
 
@@ -48,12 +73,21 @@ def enrich_predictions(
     predictions: pd.DataFrame,
     historical_features: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Attach available company metadata to the prediction output."""
+    """Attach company metadata to the prediction output."""
 
     company_lookup = (
-        historical_features[["ticker", "company_name", "industry"]]
+        historical_features[
+            [
+                "ticker",
+                "company_name",
+                "industry",
+            ]
+        ]
         .dropna(subset=["ticker"])
-        .drop_duplicates(subset=["ticker"], keep="last")
+        .drop_duplicates(
+            subset=["ticker"],
+            keep="last",
+        )
     )
 
     enriched = predictions.merge(
@@ -62,38 +96,102 @@ def enrich_predictions(
         how="left",
     )
 
-    return enriched.sort_values("predicted_volatility", ascending=False)
+    return (
+        enriched
+        .sort_values(
+            "risk_rank"
+        )
+        .reset_index(drop=True)
+    )
 
 
-def risk_count_frame(predictions: pd.DataFrame) -> pd.DataFrame:
+def risk_count_frame(
+    predictions: pd.DataFrame,
+) -> pd.DataFrame:
+    """Return the number of stocks in each risk category."""
+
     counts = (
         predictions["risk"]
         .value_counts()
-        .reindex(RISK_ORDER, fill_value=0)
+        .reindex(
+            RISK_ORDER,
+            fill_value=0,
+        )
         .rename_axis("risk")
         .reset_index(name="count")
     )
+
     return counts
 
 
-def format_percent(value: float) -> str:
+def format_percent(
+    value: float,
+) -> str:
+    """Format a decimal volatility value as a percentage."""
+
     return f"{value:.2%}"
 
 
-def render_kpis(predictions: pd.DataFrame) -> None:
+def render_kpis(
+    predictions: pd.DataFrame,
+) -> None:
+    """Render market overview KPI cards."""
+
     latest_date = predictions["date"].max()
+
     counts = predictions["risk"].value_counts()
 
     metric_cols = st.columns(5)
-    metric_cols[0].metric("Latest market date", latest_date.strftime("%d %b %Y"))
-    metric_cols[1].metric("Stocks analysed", f"{len(predictions):,}")
-    metric_cols[2].metric("High risk", int(counts.get("High", 0)))
-    metric_cols[3].metric("Moderate risk", int(counts.get("Moderate", 0)))
-    metric_cols[4].metric("Low risk", int(counts.get("Low", 0)))
+
+    metric_cols[0].metric(
+        "Latest market date",
+        latest_date.strftime("%d %b %Y"),
+    )
+
+    metric_cols[1].metric(
+        "Stocks analysed",
+        f"{len(predictions):,}",
+    )
+
+    metric_cols[2].metric(
+        "High risk",
+        int(
+            counts.get(
+                "High",
+                0,
+            )
+        ),
+    )
+
+    metric_cols[3].metric(
+        "Moderate risk",
+        int(
+            counts.get(
+                "Moderate",
+                0,
+            )
+        ),
+    )
+
+    metric_cols[4].metric(
+        "Low risk",
+        int(
+            counts.get(
+                "Low",
+                0,
+            )
+        ),
+    )
 
 
-def render_risk_distribution(predictions: pd.DataFrame) -> None:
-    counts = risk_count_frame(predictions)
+def render_risk_distribution(
+    predictions: pd.DataFrame,
+) -> None:
+    """Render risk-category distribution."""
+
+    counts = risk_count_frame(
+        predictions
+    )
 
     fig = px.bar(
         counts,
@@ -101,24 +199,44 @@ def render_risk_distribution(predictions: pd.DataFrame) -> None:
         y="count",
         color="risk",
         color_discrete_map=RISK_COLORS,
-        category_orders={"risk": RISK_ORDER},
+        category_orders={
+            "risk": RISK_ORDER,
+        },
         text="count",
     )
+
     fig.update_layout(
         showlegend=False,
         xaxis_title="Risk category",
         yaxis_title="Number of stocks",
-        margin=dict(l=20, r=20, t=20, b=20),
+        margin=dict(
+            l=20,
+            r=20,
+            t=20,
+            b=20,
+        ),
         height=360,
     )
-    fig.update_traces(textposition="outside", cliponaxis=False)
 
-    st.plotly_chart(fig, use_container_width=True)
+    fig.update_traces(
+        textposition="outside",
+        cliponaxis=False,
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+    )
 
 
-def render_ranking_table(predictions: pd.DataFrame) -> None:
+def render_ranking_table(
+    predictions: pd.DataFrame,
+) -> None:
+    """Render the current NIFTY 50 risk ranking."""
+
     table = predictions[
         [
+            "risk_rank",
             "ticker",
             "company_name",
             "industry",
@@ -130,11 +248,14 @@ def render_ranking_table(predictions: pd.DataFrame) -> None:
 
     table = table.rename(
         columns={
+            "risk_rank": "Risk Rank",
             "ticker": "Ticker",
             "company_name": "Company",
             "industry": "Industry",
             "date": "Date",
-            "predicted_volatility": "Predicted Volatility",
+            "predicted_volatility": (
+                "Predicted Volatility"
+            ),
             "risk": "Risk",
         }
     )
@@ -144,10 +265,24 @@ def render_ranking_table(predictions: pd.DataFrame) -> None:
         use_container_width=True,
         hide_index=True,
         column_config={
-            "Date": st.column_config.DateColumn(format="DD MMM YYYY"),
-            "Predicted Volatility": st.column_config.NumberColumn(
-                format="%.4f",
-                help="Model-estimated forward volatility.",
+            "Risk Rank": st.column_config.NumberColumn(
+                format="%d",
+                help=(
+                    "Current ranking among the NIFTY 50 "
+                    "stocks based on predicted volatility. "
+                    "Rank 1 represents the highest predicted volatility."
+                ),
+            ),
+            "Date": st.column_config.DateColumn(
+                format="DD MMM YYYY",
+            ),
+            "Predicted Volatility": (
+                st.column_config.NumberColumn(
+                    format="%.4f",
+                    help=(
+                        "Model-estimated forward volatility."
+                    ),
+                )
             ),
         },
     )
@@ -157,40 +292,91 @@ def render_stock_analysis(
     predictions: pd.DataFrame,
     historical_features: pd.DataFrame,
 ) -> None:
-    ticker_options = predictions["ticker"].sort_values().tolist()
-    selected_ticker = st.selectbox("Select stock", ticker_options)
+    """Render detailed analysis for a selected stock."""
+
+    ticker_options = (
+        predictions["ticker"]
+        .sort_values()
+        .tolist()
+    )
+
+    selected_ticker = st.selectbox(
+        "Select stock",
+        ticker_options,
+    )
 
     selected_prediction = predictions.loc[
         predictions["ticker"] == selected_ticker
     ].iloc[0]
 
     selected_history = (
-        historical_features.loc[historical_features["ticker"] == selected_ticker]
+        historical_features.loc[
+            historical_features["ticker"]
+            == selected_ticker
+        ]
         .sort_values("date")
         .copy()
     )
 
-    title = selected_prediction.get("company_name")
+    title = selected_prediction.get(
+        "company_name"
+    )
+
     if pd.isna(title) or not title:
         title = selected_ticker
 
-    st.subheader(f"{selected_ticker} - {title}")
+    st.subheader(
+        f"{selected_ticker} - {title}"
+    )
 
-    detail_cols = st.columns(3)
+    detail_cols = st.columns(4)
+
     detail_cols[0].metric(
         "Predicted volatility",
-        format_percent(float(selected_prediction["predicted_volatility"])),
+        format_percent(
+            float(
+                selected_prediction[
+                    "predicted_volatility"
+                ]
+            )
+        ),
     )
-    detail_cols[1].metric("Relative risk", selected_prediction["risk"])
 
-    latest_realized_volatility = selected_history["volatility_20"].dropna()
+    detail_cols[1].metric(
+        "Risk level",
+        selected_prediction["risk"],
+    )
+
+    detail_cols[2].metric(
+        "NIFTY 50 risk rank",
+        f"#{int(selected_prediction['risk_rank'])} / 50",
+    )
+
+    latest_realized_volatility = (
+        selected_history[
+            "volatility_20"
+        ]
+        .dropna()
+    )
+
     if latest_realized_volatility.empty:
-        detail_cols[2].metric("Latest 20-day volatility", "Not available")
-    else:
-        detail_cols[2].metric(
+        detail_cols[3].metric(
             "Latest 20-day volatility",
-            format_percent(float(latest_realized_volatility.iloc[-1])),
+            "Not available",
         )
+    else:
+        detail_cols[3].metric(
+            "Latest 20-day volatility",
+            format_percent(
+                float(
+                    latest_realized_volatility.iloc[-1]
+                )
+            ),
+        )
+
+    st.markdown(
+        "__Historical Volatility__"
+    )
 
     chart_data = selected_history[
         [
@@ -200,25 +386,45 @@ def render_stock_analysis(
             "volatility_20",
             "volatility_60",
         ]
-    ].dropna(how="all", subset=[
-        "volatility_5",
-        "volatility_10",
-        "volatility_20",
-        "volatility_60",
-    ])
+    ].dropna(
+        how="all",
+        subset=[
+            "volatility_5",
+            "volatility_10",
+            "volatility_20",
+            "volatility_60",
+        ],
+    )
 
     if chart_data.empty:
-        st.info("Historical volatility indicators are not available for this stock yet.")
+        st.info(
+            "Historical volatility indicators "
+            "are not available for this stock yet."
+        )
         return
 
+    # Display approximately one year of trading history.
     chart_data = chart_data.tail(252)
 
     fig = go.Figure()
+
     for column, label in [
-        ("volatility_5", "5-day volatility"),
-        ("volatility_10", "10-day volatility"),
-        ("volatility_20", "20-day volatility"),
-        ("volatility_60", "60-day volatility"),
+        (
+            "volatility_5",
+            "5-day volatility",
+        ),
+        (
+            "volatility_10",
+            "10-day volatility",
+        ),
+        (
+            "volatility_20",
+            "20-day volatility",
+        ),
+        (
+            "volatility_60",
+            "60-day volatility",
+        ),
     ]:
         fig.add_trace(
             go.Scatter(
@@ -231,61 +437,123 @@ def render_stock_analysis(
 
     fig.update_layout(
         height=420,
-        margin=dict(l=20, r=20, t=20, b=20),
+        margin=dict(
+            l=20,
+            r=20,
+            t=20,
+            b=20,
+        ),
         xaxis_title="Date",
         yaxis_title="Realized volatility",
         legend_title_text="Indicator",
     )
-    fig.update_yaxes(tickformat=".2%")
 
-    st.plotly_chart(fig, use_container_width=True)
+    fig.update_yaxes(
+        tickformat=".2%"
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+    )
 
 
 def main() -> None:
-    st.title("Investment Risk Assessment")
+    """Run the Streamlit dashboard."""
+
+    st.title(
+        "Investment Risk Assessment"
+    )
+
     st.caption(
-        "AI-powered volatility and relative risk assessment for Indian NIFTY 50 stocks."
+        "AI-powered future volatility and risk "
+        "assessment for Indian NIFTY 50 stocks."
     )
 
     try:
-        with st.spinner("Loading latest predictions..."):
+        with st.spinner(
+            "Loading latest predictions..."
+        ):
             predictions = load_predictions()
 
-        with st.spinner("Loading historical stock features..."):
-            historical_features = load_historical_features()
+        with st.spinner(
+            "Loading historical stock features..."
+        ):
+            historical_features = (
+                load_historical_features()
+            )
 
-        predictions = enrich_predictions(predictions, historical_features)
+        predictions = enrich_predictions(
+            predictions,
+            historical_features,
+        )
+
     except FileNotFoundError as exc:
         st.error(
-            "The saved XGBoost model was not found. Run the training pipeline once "
-            "to create models/xgboost_model.json, then reopen the dashboard."
+            "The saved XGBoost model was not found. "
+            "Run the training pipeline once to create "
+            "the saved model, then reopen the dashboard."
         )
+
         st.exception(exc)
+
         return
+
     except Exception as exc:
         st.error(
-            "The dashboard could not load predictions or stock data. Check your "
-            "database connection, environment variables, saved model, and market data access."
+            "The dashboard could not load predictions "
+            "or stock data. Check your database connection, "
+            "environment variables, saved model, and market "
+            "data access."
         )
+
         st.exception(exc)
+
         return
 
-    st.markdown("### Market Overview")
-    render_kpis(predictions)
+    st.markdown(
+        "### Market Overview"
+    )
 
-    left_col, right_col = st.columns([1, 1.4])
+    render_kpis(
+        predictions
+    )
+
+    left_col, right_col = st.columns(
+        [1, 1.4]
+    )
 
     with left_col:
-        st.markdown("### Risk Distribution")
-        render_risk_distribution(predictions)
+        st.markdown(
+            "### Risk Distribution"
+        )
+
+        render_risk_distribution(
+            predictions
+        )
 
     with right_col:
-        st.markdown("### Individual Stock Analysis")
-        render_stock_analysis(predictions, historical_features)
+        st.markdown(
+            "### Individual Stock Analysis"
+        )
 
-    st.markdown("### Risk Ranking")
-    st.caption("Sorted by predicted volatility, highest first.")
-    render_ranking_table(predictions)
+        render_stock_analysis(
+            predictions,
+            historical_features,
+        )
+
+    st.markdown(
+        "### NIFTY 50 Risk Ranking"
+    )
+
+    st.caption(
+        "Stocks are ranked by predicted volatility, "
+        "with Rank 1 representing the highest predicted volatility."
+    )
+
+    render_ranking_table(
+        predictions
+    )
 
 
 if __name__ == "__main__":

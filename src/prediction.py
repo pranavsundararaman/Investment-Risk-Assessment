@@ -21,12 +21,10 @@ def predict_volatility(
 
 
 def calculate_risk_thresholds(
-    predicted_volatility: pd.Series,
+    historical_volatility: pd.Series,
 ) -> tuple[float, float]:
-    """Calculate risk thresholds from current predictions."""
-
-    low_threshold = predicted_volatility.quantile(0.33)
-    high_threshold = predicted_volatility.quantile(0.66)
+    low_threshold = historical_volatility.quantile(0.25)
+    high_threshold = historical_volatility.quantile(0.75)
 
     return low_threshold, high_threshold
 

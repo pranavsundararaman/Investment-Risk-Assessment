@@ -10,6 +10,7 @@ from src.database import (
 )
 
 from src.dataset import (
+    prepare_training_dataset,
     split_features_target,
 )
 
@@ -35,6 +36,15 @@ from src.prediction import (
 from src.preprocessing import (
     preprocess_stock_data,
 )
+
+from src.target_engineering import (
+    create_future_volatility_target,
+    create_log_volatility_target,
+    remove_missing_targets,
+)
+
+
+TRAIN_END_DATE = "2024-01-01"
 
 
 def load_stock_data_from_database() -> pd.DataFrame:
@@ -91,6 +101,42 @@ def get_model_feature_columns(
     return list(features.columns)
 
 
+def calculate_production_risk_thresholds(
+    featured_data: pd.DataFrame,
+) -> tuple[float, float]:
+    """Calculate risk thresholds from historical training-period volatility."""
+
+    training_data = create_future_volatility_target(
+        featured_data
+    )
+
+    training_data = remove_missing_targets(
+        training_data
+    )
+
+    training_data = create_log_volatility_target(
+        training_data
+    )
+
+    training_data = prepare_training_dataset(
+        training_data
+    )
+
+    threshold_data = training_data[
+        training_data["date"]
+        < pd.Timestamp(TRAIN_END_DATE)
+    ]
+
+    if threshold_data.empty:
+        raise ValueError(
+            "No training-period target data is available for risk thresholds."
+        )
+
+    return calculate_risk_thresholds(
+        threshold_data["future_volatility"]
+    )
+
+
 def generate_latest_predictions(
     stock_data: pd.DataFrame | None = None,
     model_path: str | Path = DEFAULT_XGBOOST_MODEL_PATH,
@@ -127,6 +173,12 @@ def generate_latest_predictions(
             "No complete latest feature rows are available for prediction."
         )
 
+    low_threshold, high_threshold = (
+        calculate_production_risk_thresholds(
+            featured_data
+        )
+    )
+
     model = load_xgboost_model(
         model_path
     )
@@ -134,12 +186,6 @@ def generate_latest_predictions(
     predictions = predict_volatility(
         model,
         latest_rows[feature_columns],
-    )
-
-    low_threshold, high_threshold = (
-        calculate_risk_thresholds(
-            predictions
-        )
     )
 
     risk_labels = classify_risk(
@@ -165,14 +211,39 @@ def generate_latest_predictions(
         .to_numpy()
     )
 
-    return (
+    result["risk_rank"] = (
+        result["predicted_volatility"]
+        .rank(
+            ascending=False,
+            method="min",
+        )
+        .astype(int)
+    )
+
+    result = (
         result
-        .sort_values("ticker")
+        .sort_values(
+            "risk_rank"
+        )
         .reset_index(drop=True)
     )
 
+    print("\nHistorical Risk Thresholds:")
+    print(
+        "Low threshold:",
+        low_threshold,
+    )
+    print(
+        "High threshold:",
+        high_threshold,
+    )
+
+    return result
+
 
 def main() -> None:
+    """Run the production prediction service."""
+
     predictions = generate_latest_predictions()
 
     print(
