@@ -36,6 +36,9 @@ from src.evaluation import (
 
 from src.hyperparameter_search import tune_xgboost
 
+from src.market_features import add_market_features
+
+
 def main() -> None:
     """
     Run the complete machine learning pipeline.
@@ -77,6 +80,12 @@ def main() -> None:
 
     print("\nMissing Values:")
     print(stock_data.isna().sum())
+
+    stock_data = add_market_features(
+    stock_data,
+    start_date=str(stock_data["date"].min().date()),
+    end_date=str(stock_data["date"].max().date()),
+    )
 
     # =========================
     # 4. Target Engineering

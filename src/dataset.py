@@ -34,6 +34,8 @@ def split_features_target(
     "bollinger_position",
     "high_low_range",
     "volume_ratio",
+    "india_vix",
+    "nifty_volatility_20",
     ]
 
     X = stock_data[feature_columns]
