@@ -82,10 +82,6 @@ class DateTimeSeriesSplit:
                     if value
                 ]
 
-            validation_indices = X.index[
-                validation_mask
-            ]
-
             yield (
                 train_indices,
                 validation_indices,
