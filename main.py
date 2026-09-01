@@ -237,7 +237,47 @@ def main() -> None:
     )
 
     print(xgb_metrics)
+    print("X_test shape at eval time:", X_test.shape)
+    print("Model object id:", id(xgb_model))
 
+    from src.garch_baseline import run_garch_baseline
+
+    # =========================
+    # 11. GARCH(1,1) Baseline
+    # =========================
+
+    test_rows = stock_data.loc[
+        X_test.index, ["date", "ticker", "future_volatility"]
+    ]
+
+    test_dates_by_ticker = (
+        test_rows.groupby("ticker")["date"]
+        .apply(lambda s: sorted(s.unique()))
+        .to_dict()
+    )
+
+    garch_predictions = run_garch_baseline(
+        stock_data,
+        test_dates_by_ticker,
+        horizon=20,
+        refit_every=5,
+    )
+
+    comparison = test_rows.merge(
+        garch_predictions,
+        on=["date", "ticker"],
+        how="inner",
+    )
+
+    garch_metrics = evaluate_model(
+        comparison["future_volatility"],
+        comparison["garch_predicted_volatility"],
+    )
+
+    print("\nGARCH(1,1) Baseline Performance:")
+    print(garch_metrics)
+
+    print("\nXGBoost R²:", xgb_metrics["r2"], "vs GARCH R²:", garch_metrics["r2"])
 
 if __name__ == "__main__":
     main()
