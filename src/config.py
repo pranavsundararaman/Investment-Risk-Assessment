@@ -14,8 +14,7 @@ DATA_DIR = PROJECT_ROOT / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 
-NIFTY50_CSV = CONFIG_DIR / "nifty50.csv"
-
+NIFTY50_CSV = CONFIG_DIR / "NIFTY50.csv"
 
 def get_secret(name: str) -> str | None:
     """
