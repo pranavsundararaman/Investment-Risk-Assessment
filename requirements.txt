@@ -3,7 +3,7 @@ pandas==2.2.3
 numpy==2.4.6
 plotly==6.9.0
 sqlalchemy
-psycopg
+psycopg2-binary
 yfinance
 scikit-learn==1.8.0
 xgboost
