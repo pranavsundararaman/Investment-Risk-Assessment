@@ -197,6 +197,8 @@ def generate_latest_predictions(
     result = latest_rows[
         [
             "ticker",
+            "company_name",
+            "industry",
             "date",
         ]
     ].copy()

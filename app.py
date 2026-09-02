@@ -431,15 +431,6 @@ def main() -> None:
             historical_features = load_historical_features()
 
         # -----------------------------------------------------
-        # Add company metadata
-        # -----------------------------------------------------
-
-        predictions = enrich_predictions(
-            predictions,
-            historical_features,
-        )
-
-        # -----------------------------------------------------
         # Load latest market prices
         # -----------------------------------------------------
 
