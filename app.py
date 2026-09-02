@@ -242,7 +242,7 @@ def render_stock_analysis(
 
 
 def main() -> None:
-    st.title("Investment Risk Assessment")
+    st.title("Voltra — Volatility Intelligence for Indian Markets")
     st.caption(
         "AI-powered volatility and relative risk assessment for Indian NIFTY 50 stocks."
     )
