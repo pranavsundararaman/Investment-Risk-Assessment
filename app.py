@@ -19,7 +19,7 @@ RISK_COLORS = {
 
 
 st.set_page_config(
-    page_title="Investment Risk Assessment",
+    page_title="Voltra — Volatility Intelligence for Indian Markets",
     layout="wide",
 )
 
