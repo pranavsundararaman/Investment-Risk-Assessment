@@ -302,6 +302,84 @@ def calculate_prediction_risk_thresholds(
     return calculate_risk_thresholds(
         validation_predictions
     )
+def generate_latest_predictions(
+    model_path: Path = DEFAULT_XGBOOST_MODEL_PATH,
+) -> pd.DataFrame:
+    """
+    Generate volatility predictions and risk classifications
+    for the latest available market date.
+    """
+
+    stock_data = load_stock_data_from_database()
+
+    if stock_data.empty:
+        raise ValueError("No stock data available in the database.")
+
+    featured_data = build_feature_dataset(stock_data)
+
+    feature_columns = get_model_feature_columns(featured_data)
+
+    model = load_xgboost_model(model_path)
+
+    low_threshold, high_threshold = calculate_prediction_risk_thresholds(
+        featured_data,
+        model,
+        feature_columns,
+    )
+
+    latest_date = featured_data["date"].max()
+
+    latest_data = featured_data[
+        featured_data["date"] == latest_date
+    ].copy()
+
+    latest_data = latest_data.dropna(
+        subset=feature_columns
+    )
+
+    if latest_data.empty:
+        raise ValueError(
+            f"No valid feature data available for {latest_date}."
+        )
+
+    predictions = predict_volatility(
+        model,
+        latest_data[feature_columns],
+    )
+
+    latest_data["predicted_volatility"] = predictions.to_numpy()
+
+    latest_data["risk"] = classify_risk(
+        latest_data["predicted_volatility"],
+        low_threshold,
+        high_threshold,
+    ).astype(str)
+
+    latest_data["risk_rank"] = (
+        latest_data["predicted_volatility"]
+        .rank(
+            ascending=False,
+            method="min",
+        )
+        .astype(int)
+    )
+
+    result = latest_data[
+        [
+            "date",
+            "ticker",
+            "company_name",
+            "industry",
+            "close",
+            "predicted_volatility",
+            "risk",
+            "risk_rank",
+        ]
+    ].sort_values(
+        "risk_rank"
+    ).reset_index(drop=True)
+
+    return result
 
 if __name__ == "__main__":
     main()
